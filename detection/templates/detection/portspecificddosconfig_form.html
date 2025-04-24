@@ -1,0 +1,56 @@
+{# detection/templates/detection/portspecificddosconfig_form.html #}
+{% extends "detection/base.html" %}
+
+{% block title %}{{ form_title }}{% endblock %} {# form_title passed from Create/UpdateView #}
+
+{% block content %}
+  <h2 class="text-2xl font-semibold text-gray-800 mb-6">{{ form_title }}</h2>
+  <div class="bg-white p-6 rounded-2xl shadow max-w-2xl mx-auto"> {# Constrain width #}
+      <form method="post">
+          {% csrf_token %}
+
+          {# Render form fields #}
+          {% for field in form %}
+              <div class="mb-4">
+                  <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">{{ field.label }}</label>
+                  {# Apply Tailwind classes to inputs (except checkbox) using JS helper #}
+                  {% if field.name == 'is_active' %}
+                       <div class="mt-1">{{ field }}</div> {# Render checkbox normally #}
+                  {% else %}
+                      {{ field }}
+                       <script>
+                        try {
+                            document.getElementById("{{ field.id_for_label }}").classList.add(
+                                "mt-1", "block", "w-full", "px-3", "py-2", "border", "border-gray-300", "rounded-md", "shadow-sm",
+                                "focus:ring-indigo-500", "focus:border-indigo-500", "sm:text-sm",
+                                "{% if field.errors %}border-red-500{% endif %}"
+                            );
+                        } catch (e) {}
+                       </script>
+                  {% endif %}
+                  {% if field.help_text %}
+                      <p class="mt-1 text-xs text-gray-500">{{ field.help_text }}</p>
+                  {% endif %}
+                  {% for error in field.errors %}
+                      <p class="text-red-500 text-xs mt-1">{{ error }}</p>
+                  {% endfor %}
+              </div>
+          {% endfor %}
+
+          {# Form-wide errors #}
+           {% if form.non_field_errors %}
+                <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded text-xs">
+                    {% for error in form.non_field_errors %}
+                        {{ error }}
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+
+          <div class="flex justify-end gap-4 mt-6">
+              <a href="{% url 'port_specific_ddos_list' %}" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">Cancel</a>
+              <button type="submit" class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 transition duration-300">Save Port Rule</button>
+          </div>
+      </form>
+  </div>
+{% endblock %}

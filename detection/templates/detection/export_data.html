@@ -1,0 +1,93 @@
+{# detection/templates/detection/export_data.html #}
+{% extends "detection/base.html" %}
+{% load static %}
+
+{% block title %}Export Data{% endblock %}
+
+{% block extra_css %}
+{# Ensure Flatpickr CSS is loaded (it's already in base.html via CDN, but good practice) #}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block content %}
+    <div class="mb-6">
+        <h2 class="text-2xl font-semibold text-gray-800">Export Data</h2>
+        <p class="text-sm text-gray-500">Download captured security alerts.</p> {# Simplified description #}
+    </div>
+
+    {# Display messages #}
+    {% if messages %}
+        <div class="space-y-2 mb-4">
+            {% for message in messages %}
+            <div class="p-3 rounded text-sm text-white {% if message.tags == 'error' %}bg-red-500{% elif message.tags == 'success' %}bg-green-500{% elif message.tags == 'warning' %}bg-yellow-500{% else %}bg-blue-500{% endif %}" role="alert">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+
+    <div class="bg-white shadow-lg rounded-2xl p-6 mb-6">
+        <h3 class="text-xl font-medium text-gray-800 mb-4">Select Export Options</h3>
+        <form method="POST" action="{% url 'export_data' %}">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+
+                {# Data Type Selection - Simplified #}
+                <div>
+                    <label for="dataType" class="block text-gray-700 font-medium mb-2">Data Type:</label>
+                    <select class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" name="dataType" id="dataType" required>
+                        <option value="alerts" selected>Security Alerts</option>
+                        <option value="packets" selected>Packet Log Summary</option> {# Renamed & still disabled #}
+                        {# Removed SQLi Rules and Anomalies #}
+                    </select>
+                </div>
+
+                 {# File Format Selection #}
+                <div>
+                    <label for="fileFormat" class="block text-gray-700 font-medium mb-2">File Format:</label>
+                    <select class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500" name="fileFormat" id="fileFormat" required>
+                        <option value="csv" selected>CSV</option>
+                        <option value="json">JSON</option>
+                    </select>
+                </div>
+
+                {# Date Filter - Using Flatpickr #}
+                <div>
+                    <label for="dateFilterInput" class="block text-gray-700 font-medium mb-2">Select Date (for Alerts):</label>
+                    {# Input field for Flatpickr #}
+                    <input type="text" name="dateFilter" id="dateFilterInput" placeholder="Optional: Filter by Date..."
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    {# Remove the old select dropdown for dates #}
+                </div>
+
+            </div>
+
+            <div class="mt-6 text-right">
+                <button type="submit" class="px-6 py-2 bg-indigo-600 text-white font-semibold rounded-md hover:bg-indigo-700 transition duration-300">
+                    Prepare Export
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <p class="text-xs text-gray-500">Note: Packet Log export is not yet available as packet data is not persistently stored.</p>
+
+{% endblock %}
+
+{% block extra_js %}
+{# Ensure Flatpickr JS is loaded (it's already in base.html via CDN) #}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+    // Initialize Flatpickr for the date input field
+    flatpickr("#dateFilterInput", {
+        dateFormat: "Y-m-d", // Send date in YYYY-MM-DD format
+        altInput: true,      // Show a more user-friendly format to the user
+        altFormat: "F j, Y", // e.g., April 23, 2025
+        allowInput: true,    // Allow manual typing
+        enableTime: false,   // Disable time selection
+        // Optional: Add maxDate: "today" if you only want to allow past/present dates
+        // maxDate: "today",
+    });
+</script>
+{% endblock %}

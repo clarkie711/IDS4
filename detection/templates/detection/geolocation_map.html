@@ -1,0 +1,126 @@
+{# detection/templates/detection/geolocation_map.html #}
+{% extends "detection/base.html" %}
+{% load static %}
+
+{% block title %}Alert Geolocation Map{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <style>
+        #map { height: 600px; width: 100%; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .leaflet-popup-content { font-size: 0.8rem; }
+        .leaflet-popup-content b { font-weight: 600; }
+    </style>
+{% endblock %}
+
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-semibold text-gray-800">Alert Geolocation Map</h2>
+    <p class="text-sm text-gray-500">Visualization of recent alert source locations relative to SPCF Main Campus.</p>
+</div>
+
+<div id="map"></div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <script>
+        // --- School Coordinates and Info ---
+        const schoolLat = 15.15821;
+        const schoolLng = 120.59344;
+        const schoolName = "Systems Plus College Foundation Main Campus";
+        const schoolAddress = "McArthur Highway, Balibago, Angeles City, Pampanga, Philippines";
+        const geoFenceRadiusMeters = 150; // Example: 1km radius - ADJUST AS NEEDED
+        const defaultZoom = 15; // Zoom closer initially
+
+        // --- Initialize Leaflet map ---
+        // Set initial view to the school location
+        const map = L.map('map').setView([schoolLat, schoolLng], defaultZoom);
+
+        // Add OpenStreetMap tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // --- Add Marker for the School ---
+        const schoolIcon = L.icon({ // Use a distinct icon for the school
+            iconUrl: '{% static "images/marker-icon-blue.png" %}', // Example: Blue marker
+            shadowUrl: '{% static "images/marker-shadow.png" %}',
+            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+        });
+        const schoolMarker = L.marker([schoolLat, schoolLng], {icon: schoolIcon}).addTo(map);
+        schoolMarker.bindPopup(`<b>${schoolName}</b><br>${schoolAddress}`);
+
+        // --- Add Geofence Circle ---
+        const geoFenceCircle = L.circle([schoolLat, schoolLng], {
+            color: '#3B82F6',       // Blue outline
+            fillColor: '#BFDBFE',   // Lighter blue fill
+            fillOpacity: 0.3,
+            radius: geoFenceRadiusMeters // Use the defined radius
+        }).addTo(map);
+        geoFenceCircle.bindPopup(`Geofence (${geoFenceRadiusMeters}m radius)`);
+
+        // --- Get alert data passed from the Django view ---
+        let alertData = [];
+        try {
+            alertData = JSON.parse('{{ alerts_json|escapejs }}');
+        } catch (e) { console.error("Error parsing alert data:", e); }
+        console.log("Alert data for map:", alertData);
+
+        // --- Icons for Alerts ---
+        const greenIcon = L.icon({ iconUrl: '{% static "images/marker-icon-green.png" %}', shadowUrl: '{% static "images/marker-shadow.png" %}', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+        const redIcon = L.icon({ iconUrl: '{% static "images/marker-icon-red.png" %}', shadowUrl: '{% static "images/marker-shadow.png" %}', iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41] });
+
+        const markersList = []; // To potentially fit bounds later
+
+        if (alertData.length > 0) {
+            alertData.forEach(alert => {
+                const lat = parseFloat(alert.latitude);
+                const lon = parseFloat(alert.longitude);
+
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    const alertLatLng = L.latLng(lat, lon);
+                    // Check distance from the school coordinates
+                    const distance = map.distance(alertLatLng, [schoolLat, schoolLng]);
+                    const isInsideGeofence = distance <= geoFenceRadiusMeters;
+
+                    const iconToUse = isInsideGeofence ? greenIcon : redIcon;
+                    const statusText = isInsideGeofence ? 'Inside Geo-fence' : 'Outside Geo-fence';
+
+                    const popupContent = `
+                        <b>${alert.source_ip || 'N/A'}</b><br>
+                        <b>Type:</b> ${alert.alert_type || 'N/A'}<br>
+                        <b>Location:</b> ${alert.city || 'N/A'}, ${alert.country || 'N/A'}<br>
+                        <b>Status:</b> ${statusText} (${distance.toFixed(0)}m)<br> {# Show distance #}
+                        <b>Time:</b> ${alert.timestamp || 'N/A'}<br>
+                        <b>Details:</b> ${alert.details ? alert.details.substring(0, 100) + (alert.details.length > 100 ? '...' : '') : 'N/A'}
+                    `;
+
+                    const marker = L.marker(alertLatLng, {icon: iconToUse});
+                    marker.bindPopup(popupContent);
+                    markersList.push(marker);
+
+                } else {
+                    console.warn(`Invalid coordinates for IP ${alert.source_ip}`);
+                }
+            });
+
+             // Add markers to map
+             if (markersList.length > 0) {
+                 const group = L.featureGroup(markersList).addTo(map);
+                 // Optionally fit bounds, but initial view is set to school
+                 // try { map.fitBounds(group.getBounds().pad(0.3)); } catch (e) { console.error("Error fitting bounds:", e); }
+            }
+
+        } else {
+             console.log("No alert data with coordinates to display on map.");
+             document.getElementById('map').innerHTML = '<p class="text-center text-gray-500 p-5">No geolocatable alert data found.</p>';
+        }
+
+    </script>
+{% endblock %}

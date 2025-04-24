@@ -1,0 +1,98 @@
+{# detection/templates/detection/blockedip_list.html #}
+{% extends "detection/base.html" %}
+
+{% block title %}Blocked IP Addresses{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-semibold text-gray-800">Block Management</h2>
+    <p class="text-sm text-gray-500">View currently blocked IP addresses and manually block/unblock IPs.</p>
+</div>
+
+{# --- Manual Block Form --- #}
+<div class="bg-white p-4 rounded-2xl shadow mb-6">
+    <h3 class="text-lg font-semibold text-indigo-600 mb-3">Manually Block IP Address</h3>
+     {% if form.errors %} {# Display form errors if redirect passed them back (more advanced) #}
+         <div class="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded text-xs">
+             <p><strong>Error blocking IP:</strong></p>
+             {{ form.non_field_errors }}
+             {{ form.ip_address.errors }}
+             {{ form.reason.errors }}
+         </div>
+     {% endif %}
+    <form method="post" action="{% url 'block_ip_manually' %}" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        {% csrf_token %}
+        <div class="md:col-span-2"> {# IP Address Field #}
+            <label for="{{ form.ip_address.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">IP Address to Block</label>
+            {{ form.ip_address }}
+             <script>try { document.getElementById("{{ form.ip_address.id_for_label }}").classList.add("mt-1","block","w-full","px-3","py-2","border","border-gray-300","rounded-md","shadow-sm"); } catch (e) {}</script>
+             {% if form.ip_address.help_text %}<p class="mt-1 text-xs text-gray-500">{{ form.ip_address.help_text }}</p>{% endif %}
+        </div>
+        <div class="md:col-span-1"> {# Reason Field #}
+             <label for="{{ form.reason.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">Reason (Optional)</label>
+             {{ form.reason }}
+             <script>try { document.getElementById("{{ form.reason.id_for_label }}").classList.add("mt-1","block","w-full","px-3","py-2","border","border-gray-300","rounded-md","shadow-sm"); } catch (e) {}</script>
+        </div>
+        <div class="md:col-span-1"> {# Submit Button #}
+             <button type="submit" class="w-full px-4 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 transition duration-300">Block IP</button>
+        </div>
+    </form>
+</div>
+
+
+{# --- Blocked IP Table --- #}
+<div class="bg-white p-4 rounded-2xl shadow">
+    <h3 class="text-lg font-semibold text-indigo-600 mb-3">Currently Blocked IPs</h3>
+    <div class="overflow-x-auto">
+        {% if blocked_ips %} {# Use context_object_name from ListView #}
+            <table class="min-w-full text-sm text-left text-gray-600">
+                <thead class="text-xs text-gray-500 uppercase bg-gray-100">
+                    <tr>
+                        <th class="px-4 py-2">IP Address</th>
+                        <th class="px-4 py-2">Reason</th>
+                        <th class="px-4 py-2">Blocked At</th>
+                        <th class="px-4 py-2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in blocked_ips %}
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="px-4 py-2 font-mono">{{ item.ip_address }}</td>
+                        <td class="px-4 py-2 text-xs">{{ item.reason|default:"N/A"|truncatechars:100 }}</td>
+                        <td class="px-4 py-2 whitespace-nowrap">{{ item.timestamp|date:"Y-m-d H:i" }}</td>
+                        <td class="px-4 py-2 whitespace-nowrap">
+                            {# Unblock Form - Use POST for safety #}
+                            <form action="{% url 'unblock_ip' item.pk %}" method="post" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="text-green-600 hover:underline" onclick="return confirm('Are you sure you want to unblock {{ item.ip_address }}?')">Unblock</button>
+                            </form>
+                            {# Optional: Verify button #}
+                            {# <button class="text-blue-600 hover:underline ml-3" onclick="verifyBlock('{{ item.ip_address }}')">Verify</button> #}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {# Pagination controls #}
+             {% if is_paginated %}
+                <div class="mt-4 flex justify-center">
+                    <span class="text-sm text-gray-700"> Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}. </span>
+                    <div class="ml-4">
+                        {% if page_obj.has_previous %}<a href="?page=1" class="px-3 py-1 border rounded hover:bg-gray-100">« first</a> <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1 border rounded hover:bg-gray-100">previous</a>{% endif %}
+                        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1 border rounded hover:bg-gray-100">next</a> <a href="?page={{ page_obj.paginator.num_pages }}" class="px-3 py-1 border rounded hover:bg-gray-100">last »</a>{% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        {% else %}
+             <p class="text-sm text-gray-500 py-4 text-center">No IPs currently in the blocklist database.</p>
+        {% endif %}
+    </div>
+    <p class="text-xs text-gray-500 mt-4">Note: This list reflects the database. Firewall rules might differ if manual changes were made or if unblocking failed.</p>
+</div>
+
+
+<script>
+function verifyBlock(ip) { alert(`Verification for ${ip} not implemented yet.`); }
+</script>
+
+{% endblock %}

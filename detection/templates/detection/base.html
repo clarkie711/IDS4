@@ -1,0 +1,98 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}IDS Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="flex min-h-screen">
+
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white shadow-lg flex flex-col justify-between fixed top-0 left-0 h-full z-10">
+            <div>
+                <div class="p-6 border-b border-gray-200 text-center">
+                    <img src="{% static 'detection/images/spcf.jpg' %}" alt="Logo" class="mx-auto w-16 h-16 mb-2">
+                    <h1 class="text-2xl font-bold text-indigo-600">IDS Dashboard</h1>
+                    {% if user.is_authenticated %}
+                        <p class="text-sm text-gray-500 mt-1">User: {{ user.username }} {% if user.is_staff %}(Staff){% endif %}</p>
+                    {% endif %}
+                </div>
+                <nav class="mt-4 space-y-2 px-4">
+                    {% if user.is_authenticated %}
+                        {# --- Main Navigation Items --- #}
+                        <a href="{% url 'home' %}" class="block px-4 py-2 rounded hover:bg-indigo-100 {% if request.resolver_match.url_name == 'home' %}bg-indigo-200{% endif %}">Dashboard</a>
+                        <a href="{% url 'alert_list' %}" class="block px-4 py-2 rounded hover:bg-indigo-100 {% if request.resolver_match.url_name == 'alert_list' %}bg-indigo-200{% endif %}">Alerts</a>
+                        <a href="{% url 'realtime_packets' %}" class="block px-4 py-2 rounded hover:bg-indigo-100 {% if request.resolver_match.url_name == 'realtime_packets' %}bg-indigo-200{% endif %}">Real-time Packets</a>
+                        <a href="{% url 'geolocation_map' %}" class="block px-4 py-2 rounded hover:bg-indigo-100 {% if request.resolver_match.url_name == 'geolocation_map' %}bg-indigo-200{% endif %}">Geo Map</a>
+                        <a href="{% url 'export_data' %}" class="block px-4 py-2 rounded hover:bg-indigo-100 {% if request.resolver_match.url_name == 'export_data' %}bg-indigo-200{% endif %}">Export Data</a>
+                        
+                        {# --- Rules Management (Staff Only) --- #}
+                        {% if user.is_staff %}
+                             {# Add some spacing #}
+                             <a href="{% url 'manage_rules' %}" class="block px-4 py-2 rounded hover:bg-indigo-100 {% if 'rules' in request.resolver_match.view_name or request.resolver_match.url_name == 'manage_rules' %}bg-indigo-200{% endif %}">Rules Management</a>
+                                {# Add links for other rule types here later #}
+                        {% endif %}
+
+                         {# --- Admin Site (Staff Only) --- #}
+                         {% if user.is_staff %}
+                             <div class="pt-2"> {# Add some spacing #}
+                                <span class="block px-4 pt-2 pb-1 text-xs text-gray-500 uppercase font-semibold">Administration</span>
+                                <a href="{% url 'admin:index' %}" class="block pl-8 pr-4 py-2 rounded hover:bg-indigo-100">Admin Site</a>
+                                {# Add Export, User Management (custom), etc. here later #}
+                            </div>
+                         {% endif %}
+                        {# --- ADD BLOCK LIST LINK --- #}
+                        <a href="{% url 'blocked_ip_list' %}" class="block pl-8 pr-4 py-2 rounded hover:bg-indigo-100 {% if 'block' in request.resolver_match.url_name %}bg-indigo-200{% endif %}">Block Management</a>
+                        {# --- Real-time Graph REMOVED --- #}
+                        {# <a href="{% url 'realtime_graph' %}" class="block px-4 py-2 rounded hover:bg-indigo-100 {% if request.resolver_match.url_name == 'realtime_graph' %}bg-indigo-200{% endif %}">Real-time Graph</a> #}
+
+                        {% endif %}
+                </nav>
+            </div>
+
+            <div class="p-4 border-t border-gray-200">
+                {% if user.is_authenticated %}
+                    <form id="logout-form" method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="block w-full text-center text-red-600 hover:underline focus:outline-none">Logout</button>
+                    </form>
+                {% else %}
+                    <a href="{% url 'login' %}" class="block text-center text-blue-600 hover:underline">Login</a>
+                {% endif %}
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="flex-1 p-6 overflow-y-auto ml-64">
+            {# Django Messages Framework #}
+            {% if messages %}
+                <div class="space-y-2 mb-4">
+                    {% for message in messages %}
+                    <div class="p-3 rounded text-sm text-white {% if message.tags == 'error' %}bg-red-500{% elif message.tags == 'success' %}bg-green-500{% elif message.tags == 'warning' %}bg-yellow-500{% else %}bg-blue-500{% endif %}" role="alert">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {# Content block for child templates #}
+            {% block content %}
+            {% endblock %}
+        </main>
+
+    </div>
+
+{# Optional: Add block for page-specific JavaScript #}
+{% block extra_js %}
+{% endblock %}
+
+</body>
+</html>

@@ -1,0 +1,35 @@
+{# detection/templates/detection/sqli_pattern_confirm_delete.html #}
+{% extends "detection/base.html" %}
+
+{% block title %}Confirm Delete SQLi Pattern{% endblock %}
+
+{% block content %}
+  <h2 class="text-2xl font-semibold text-red-600 mb-6">Confirm Deletion</h2>
+
+  <div class="bg-white p-6 rounded-2xl shadow">
+      <p class="mb-4 text-gray-700">Are you sure you want to delete the following SQL Injection pattern?</p>
+
+      <div class="bg-gray-100 p-4 rounded mb-6 border border-gray-200">
+          <p class="font-medium text-gray-800">Pattern:</p>
+          <code class="block text-sm text-gray-600 break-all mb-2">{{ object.pattern }}</code> {# 'object' is the context variable passed by DeleteView #}
+
+          <p class="font-medium text-gray-800">Description:</p>
+          <p class="text-sm text-gray-600">{{ object.description|default:"(No description)" }}</p>
+      </div>
+
+      <form method="post">
+          {% csrf_token %}
+          <div class="flex justify-end gap-4">
+              {# Go back to the list view if cancelled #}
+              <a href="{% url 'sqli_pattern_list' %}" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                  Cancel
+              </a>
+              {# Submit button performs the deletion #}
+              <button type="submit" class="px-4 py-2 bg-red-600 text-white font-semibold rounded-md hover:bg-red-700 transition duration-300">
+                  Yes, Delete Pattern
+              </button>
+          </div>
+      </form>
+  </div>
+
+{% endblock %}

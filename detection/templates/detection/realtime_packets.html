@@ -1,0 +1,234 @@
+{# detection/templates/detection/realtime_packets.html #}
+{% extends "detection/base.html" %}
+{% load static %}
+
+{% block title %}Real-time Packet Feed & Rate{% endblock %} {# Updated Title #}
+
+{% block content %}
+
+{# --- Top Row for Heading and Total Count --- #}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+    <div class="md:col-span-2">
+        <h2 class="text-2xl font-semibold text-gray-800">Real-time Packet Feed & Rate</h2>
+        <p class="text-sm text-gray-500">Live view of network packets involving {{ monitored_ip }} and packets per second.</p>
+    </div>
+    <div class="md:col-span-1 bg-white p-4 rounded-2xl shadow text-center">
+        <p class="text-sm text-gray-500">Total Packets Seen</p> {# Persistent count #}
+        <p class="text-2xl font-bold text-teal-600" id="totalPacketCountDisplay">
+             {{ total_packet_count|default:"0" }} {# Display value from context #}
+        </p>
+    </div>
+</div>{# --- End Top Row --- #}
+
+{# --- Main Content Area Grid --- #}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+
+    {# --- Left Column (Chart) --- #}
+    <div class="lg:col-span-2 bg-white rounded-2xl shadow p-4">
+        <h3 class="text-lg font-semibold text-indigo-600 mb-3">Packets per Second</h3>
+        <div class="relative" style="height: 250px;">
+             <canvas id="packetRateChart"></canvas>
+        </div>
+    </div>
+
+    {# --- Right Column (Latest Packet) --- #}
+    <div class="lg:col-span-1 bg-white rounded-2xl shadow p-4 font-mono text-xs">
+        <h3 class="text-base font-semibold text-indigo-600 mb-2">Latest Packet</h3>
+        <div id="latest-packet-content">Waiting for data...</div>
+    </div>
+
+</div> {# --- End Chart/Latest Row --- #}
+
+
+{# --- Recent Packets Table (Full Width Below) --- #}
+<div class="bg-white rounded-2xl shadow p-4 mb-8">
+    <h3 class="text-lg font-semibold text-indigo-600 mb-3">Recent Packets</h3>
+    <div class="overflow-x-auto max-w-full">
+        <div class="overflow-y-auto border border-gray-200 rounded" style="max-height: 500px;">
+            <table class="min-w-full text-sm text-left text-gray-600">
+                <thead class="text-xs text-gray-500 uppercase bg-gray-100 sticky top-0 z-10">
+                    <tr>
+                        <th class="px-4 py-2 bg-gray-100">Timestamp</th>
+                        <th class="px-4 py-2 bg-gray-100">Protocol</th>
+                        <th class="px-4 py-2 bg-gray-100">Source IP</th>
+                        <th class="px-4 py-2 bg-gray-100">Destination IP</th>
+                        <th class="px-4 py-2 bg-gray-100">Dest Port</th>
+                        <th class="px-4 py-2 bg-gray-100">Size (Bytes)</th>
+                    </tr>
+                </thead>
+                <tbody id="packet-table-body">
+                    <tr id="initial-message-row"> {# Keep this ID for removal logic #}
+                        <td colspan="6" class="px-4 py-2 text-center text-gray-400">Waiting for incoming packet data...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+{# Chart.js is included in base.html via CDN #}
+<script>
+    // --- Get DOM elements ---
+    const packetTableBody = document.getElementById('packet-table-body');
+    const latestPacketContent = document.getElementById('latest-packet-content');
+    const chartCanvas = document.getElementById('packetRateChart');
+    //const sessionPacketCountElement = document.getElementById('sessionPacketCount');
+
+    // --- Constants ---
+    const MAX_TABLE_ROWS = 100;
+    const CHART_MAX_DATA_POINTS = 60;
+    const CHART_UPDATE_INTERVAL_MS = 1000;
+
+    // --- Chart & Counter Variables ---
+    //let sessionPackets = 0;
+    let packetCountCurrentInterval = 0;
+    let chartData = {
+        labels: [],
+        datasets: [{
+            label: 'Packets per Second',
+            data: [],
+            borderColor: 'rgb(75, 192, 192)',
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            borderWidth: 1,
+            fill: true,
+            tension: 0.1
+        }]
+    };
+    let packetRateChart = null;
+    let chartUpdateIntervalId = null;
+
+
+    // --- Initialize Chart ---
+    if (chartCanvas) {
+        const ctx = chartCanvas.getContext('2d');
+        packetRateChart = new Chart(ctx, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, title: { display: true, text: 'Packets' } },
+                    x: { title: { display: true, text: 'Time' } }
+                },
+                animation: { duration: 0 },
+                hover: { mode: null },
+                plugins: { legend: { display: false } }
+            }
+        });
+        chartUpdateIntervalId = setInterval(updateChart, CHART_UPDATE_INTERVAL_MS);
+    } else {
+        console.error("Chart canvas element not found!");
+    }
+
+
+    // --- Function to Update Chart periodically ---
+    function updateChart() {
+        // ... (keep existing updateChart function - it's correct) ...
+        if (!packetRateChart) return;
+        const now = new Date();
+        const timeLabel = now.toLocaleTimeString();
+        chartData.labels.push(timeLabel);
+        chartData.datasets[0].data.push(packetCountCurrentInterval);
+        packetCountCurrentInterval = 0; // Reset counter
+        if (chartData.labels.length > CHART_MAX_DATA_POINTS) {
+            chartData.labels.shift();
+            chartData.datasets[0].data.shift();
+        }
+        packetRateChart.update();
+    }
+
+
+    // --- WebSocket Connection ---
+    const packetSocket = new WebSocket(
+        'ws://' + window.location.host + '/ws/packets/'
+    );
+
+    packetSocket.onopen = function(e) { console.log("Packet WebSocket connection established"); };
+    packetSocket.onclose = function(e) { /* ... (keep existing close handling) ... */ };
+    packetSocket.onerror = function(e) { /* ... (keep existing error handling) ... */ };
+
+  // --- Handle Incoming Messages ---
+packetSocket.onmessage = function(e) {
+    const data = JSON.parse(e.data);
+    // console.log("Received packet data:", data); // Keep commented unless debugging
+
+    // Increment chart counter (This is for the Packets Per Second chart - KEEP THIS)
+    packetCountCurrentInterval++;
+
+    // --- START: REMOVE OR COMMENT OUT Session Packet Count Logic ---
+    /*
+     // Increment and Update Session Packet Count Display
+     sessionPackets++; // Remove or comment out this line
+     if (sessionPacketCountElement) { // Remove or comment out this block
+         sessionPacketCountElement.textContent = sessionPackets.toLocaleString();
+     }
+    */
+    // --- END: REMOVE OR COMMENT OUT Session Packet Count Logic ---
+
+
+    // Remove initial message row (Keep this logic)
+    let initialRow = document.getElementById('initial-message-row');
+     if (initialRow && initialRow.parentNode) {
+        initialRow.parentNode.removeChild(initialRow);
+     }
+
+
+    // Update Latest Packet Display (Keep this logic)
+    if (latestPacketContent) {
+        latestPacketContent.innerHTML = `
+            Timestamp: ${data.timestamp || 'N/A'}<br>
+            Protocol: ${data.protocol || 'N/A'}<br>
+            Source: ${data.source_ip || 'N/A'}<br>
+            Destination: ${data.dest_ip || 'N/A'}:${data.dest_port == null ? 'N/A' : data.dest_port}<br>
+            Size: ${data.size || 'N/A'} bytes
+        `;
+    } else {
+        console.error("Element with ID 'latest-packet-content' not found!");
+    }
+
+
+            // Inside packetSocket.onmessage = function(e) { ... }
+
+        // --- FIX: Update Packet Table ---
+        // Make sure the target element exists
+        if (packetTableBody) { // <-- Is this check passing?
+            console.log("Attempting table update for:", data); // Did you add this log?
+            try {
+                const newRow = packetTableBody.insertRow(0); // <-- Potential failure point 1
+                newRow.classList.add('border-b');
+
+                // Potential failure point 2 (Incorrect data key or cell index)
+                newRow.insertCell(0).textContent = data.timestamp || '';
+                newRow.insertCell(1).textContent = data.protocol || '';
+                newRow.insertCell(2).textContent = data.source_ip || '';
+                newRow.insertCell(3).textContent = data.dest_ip || '';
+                newRow.insertCell(4).textContent = data.dest_port === null ? '' : data.dest_port;
+                newRow.insertCell(5).textContent = data.size || '';
+
+                // Potential failure point 3 (Error applying styles)
+                for (let i=0; i<newRow.cells.length; i++){
+                    newRow.cells[i].classList.add('px-4', 'py-2');
+                }
+
+                // Potential failure point 4 (Error limiting rows)
+                if (packetTableBody.rows.length > MAX_TABLE_ROWS) {
+                    packetTableBody.deleteRow(packetTableBody.rows.length - 1);
+                }
+                console.log("Table update successful."); // Does this log appear?
+           } catch (tableErr) {
+                console.error("Error updating packet table:", tableErr); // Does *this* log appear?
+           }
+           } else {
+                console.error("Element with ID 'packet-table-body' not found!"); // Check if this appears
+           }
+           // --- END FIX ---
+        }
+    </script>
+
+
+{% endblock %}

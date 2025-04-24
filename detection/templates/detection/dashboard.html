@@ -1,0 +1,268 @@
+{# detection/templates/detection/dashboard.html #}
+{% extends "detection/base.html" %}
+{% load static %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-semibold text-gray-800">Welcome, {{ user.username }}</h2>
+    <p class="text-sm text-gray-500">Overview of recent alerts, system status, and network activity.</p>
+</div>
+
+<!-- Dashboard Cards -->
+{# Changed grid columns to 4 to accommodate the new card #}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    {# Card 1: Alerts Last 24h #}
+    <div class="bg-white p-4 rounded-2xl shadow">
+        <p class="text-sm text-gray-500">Alerts (Last 24h)</p>
+        <p class="text-2xl font-bold" id="totalAlerts24h">{{ total_alerts_24h }}</p>
+         {% for alert_type_info in alerts_by_type_24h %}
+             <p class="text-xs text-gray-600">{{ alert_type_info.alert_type }}: {{ alert_type_info.count }}</p>
+         {% empty %}
+             <p class="text-xs text-gray-600">None</p>
+         {% endfor %}
+    </div>
+    {# Card 2: Total Packets Seen (Persistent) #}
+<div class="bg-white p-4 rounded-2xl shadow">
+    <p class="text-sm text-gray-500">Total Packets Seen</p>
+     {# Display value from context, format it #}
+    <p class="text-2xl font-bold text-teal-600" id="totalPacketCountDisplay">
+        {{ total_packet_count|default:"0" }} {# Add default filter #}
+    </p>
+</div>
+    {# --- END ADDED CARD --- #}
+    {# Card 3: DDoS Status #}
+    <div class="bg-white p-4 rounded-2xl shadow">
+        <p class="text-sm text-gray-500">DDoS Detection</p>
+        {% if ddos_config_active %} {# Use boolean variable #}
+            <p class="text-lg font-bold text-green-600">Active</p>
+            <p class="text-xs text-gray-600">Window: {{ ddos_config_obj.time_window_seconds }}s</p>
+            <p class="text-xs text-gray-600">Threshold: {{ ddos_config_obj.request_threshold }}</p>
+        {% else %}
+            <p class="text-lg font-bold text-red-600">Inactive</p>
+        {% endif %}
+    </div>
+    {# Card 4: SQLi Rules Status #}
+    <div class="bg-white p-4 rounded-2xl shadow">
+        <p class="text-sm text-gray-500">SQLi Rules</p>
+        <p class="text-2xl font-bold">{{ active_sqli_rules }}</p>
+        <p class="text-xs text-gray-600">Active Patterns</p>
+    </div>
+</div>
+
+<!-- Real-time Data - Updated by WebSocket -->
+<div id="real-time-data" class="bg-white rounded-2xl shadow p-4 mb-6 font-mono text-xs">
+    <h3 class="text-base font-semibold text-indigo-600 mb-2">Latest Packet Seen</h3>
+    <div id="real-time-data-content">Connecting to real-time feed...</div>
+</div>
+
+<!-- Alert Trend Chart -->
+<div class="bg-white rounded-2xl shadow p-4 mb-6">
+    <h3 class="text-lg font-semibold text-indigo-600 mb-3">Alert Trend (Last 24 Hours by Hour)</h3>
+    <div class="relative" style="height: 250px;"> {# Container controls height #}
+        <canvas id="alertTrendChart"></canvas> {# Canvas fills container #}
+    </div>
+</div>
+
+
+<!-- Detected Anomalies (Showing Recent Alerts for now) -->
+<div class="bg-white rounded-2xl shadow p-4">
+     <div class="flex justify-between items-center mb-3">
+        <h3 class="text-lg font-semibold text-red-600">Recent Activity / Anomalies (Placeholder)</h3>
+         <a href="{% url 'alert_list' %}" class="text-sm text-indigo-600 hover:underline">View All Alerts</a>
+    </div>
+    <div class="overflow-x-auto max-w-full">
+        <div class="overflow-y-auto border border-gray-200 rounded" style="max-height: 400px;">
+            <table class="min-w-full text-sm text-left text-gray-600">
+                <thead class="text-xs text-gray-500 uppercase bg-gray-100 sticky top-0 z-10">
+                    <tr>
+                        <th class="px-4 py-2 bg-gray-100">Timestamp</th>
+                        <th class="px-4 py-2 bg-gray-100">Source IP</th>
+                        <th class="px-4 py-2 bg-gray-100">Type</th>
+                        <th class="px-4 py-2 bg-gray-100">Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alert in recent_alerts %}
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="px-4 py-2">{{ alert.timestamp|date:"Y-m-d H:i:s" }}</td>
+                        <td class="px-4 py-2">{{ alert.source_ip }}</td>
+                        <td class="px-4 py-2 {% if alert.alert_type == 'SQLI' %}text-red-600 font-semibold{% elif alert.alert_type == 'DDOS' %}text-orange-600 font-semibold{% endif %}">
+                            {{ alert.get_alert_type_display }}
+                        </td>
+                        <td class="px-4 py-2">{{ alert.details|truncatechars:150 }}</td>
+                    </tr>
+                    {% empty %}
+                     <tr class="border-b">
+                        <td colspan="4" class="px-4 py-2 text-center text-gray-500">No recent alerts found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+{# Chart.js already included #}
+<script>
+     // --- Get DOM Elements ---
+     const latestPacketContent = document.getElementById('real-time-data-content');
+     // const sessionPacketCountElement = document.getElementById('sessionPacketCount'); // <-- REMOVE/COMMENT OUT
+     const alertChartCanvas = document.getElementById('alertTrendChart');
+ 
+     // --- Initialize Variables ---
+     // let sessionPackets = 0; // <-- REMOVE/COMMENT OUT
+ 
+     // --- WebSocket for Latest Packet Display ONLY ---
+     // (Session count is now loaded from backend via page context)
+     const packetSocket = new WebSocket('ws://' + window.location.host + '/ws/packets/');
+ 
+     packetSocket.onopen = function(e) {
+         console.log("Packet WebSocket connected for dashboard.");
+         if (latestPacketContent) latestPacketContent.textContent = "Connected. Waiting for data...";
+     };
+     packetSocket.onclose = function(e) {
+         console.error('Packet WebSocket closed:', e);
+         if (latestPacketContent) latestPacketContent.textContent = "WebSocket disconnected.";
+     };
+     packetSocket.onerror = function(e) {
+         console.error('Packet WebSocket error:', e);
+         if (latestPacketContent) latestPacketContent.textContent = "WebSocket connection error.";
+     };
+ 
+     packetSocket.onmessage = function(e) {
+         const data = JSON.parse(e.data);
+ 
+         // Update latest packet display (KEEP THIS)
+         if (latestPacketContent) {
+             latestPacketContent.innerHTML = `
+                 Time: ${data.timestamp || 'N/A'} | Proto: ${data.protocol || 'N/A'} |
+                 Src: ${data.source_ip || 'N/A'} |
+                 Dst: ${data.dest_ip || 'N/A'}:${data.dest_port == null ? '' : data.dest_port} |
+                 Size: ${data.size || 'N/A'} bytes
+             `;
+         }
+ 
+         // --- REMOVE/COMMENT OUT Session Packet Count Update Logic ---
+         /*
+         sessionPackets++;
+         if (sessionPacketCountElement) {
+             sessionPacketCountElement.textContent = sessionPackets.toLocaleString();
+         }
+         */
+        // ------------------------------------------------------------
+     };
+ 
+ 
+     // --- Initialize Alert Trend Chart --
+     if (alertChartCanvas) {
+         const ctxAlert = alertChartCanvas.getContext('2d');
+         let alertLabels = [];
+         let alertCounts = [];
+         try {
+              alertLabels = JSON.parse('{{ alert_trend_labels_json|escapejs }}');
+              alertCounts = JSON.parse('{{ alert_trend_counts_json|escapejs }}');
+         } catch(e) { console.error("Error parsing chart data:", e); }
+ 
+         // --- Double-check Chart Options and Styling ---
+         const alertTrendChart = new Chart(ctxAlert, {
+             type: 'line',
+             data: {
+                 labels: alertLabels,
+                 datasets: [{
+                     label: 'Alerts per Hour (Last 24h)', // Legend label
+                     data: alertCounts,
+                     borderColor: 'rgb(239, 68, 68)', // Tailwind red-500 approx
+                     backgroundColor: 'rgba(239, 68, 68, 0.2)', // Lighter red fill with transparency
+                     borderWidth: 2, // Slightly thicker line
+                     fill: true,     // Fill area under the line
+                     tension: 0.1    // Slight curve (adjust 0.0 for sharp, 0.4 for very curved)
+                 }]
+             },
+             options: {
+                 responsive: true,              // Ensures chart resizes
+                 maintainAspectRatio: false,     // Important with fixed height container
+                 scales: {
+                     y: {
+                         beginAtZero: true,        // Start y-axis at 0
+                         title: {
+                             display: true,
+                             text: 'Number of Alerts'
+                         }
+                     },
+                     x: {
+                         title: {
+                             display: true,
+                             text: 'Hour (Last 24 Hours)' // More descriptive axis title
+                         }
+                     }
+                 },
+                  plugins: {
+                      legend: {
+                          display: true, // Show the legend (label defined in dataset)
+                          position: 'top', // Position legend at the top
+                      }
+                  }
+             }
+         });
+         // --- End Chart Options/Styling Check ---
+ 
+     } else {
+         console.error("Alert Trend Chart canvas not found!");
+     }
+ 
+     // --- WebSocket for Real-time Alerts ---
+     // ... (Keep existing alert WebSocket JS if implemented) ...
+ 
+
+       // --- WebSocket for Real-time Alerts ---
+       const recentAlertsTableBody = document.querySelector('#recentAlertsTableBody'); // Assuming table body in anomaly section has this ID
+       const alertSocket = new WebSocket('ws://' + window.location.host + '/ws/alerts/');
+   
+       alertSocket.onopen = function(e) { console.log("Alert WebSocket connected."); };
+       alertSocket.onclose = function(e) { console.error('Alert WebSocket closed:', e); };
+       alertSocket.onerror = function(e) { console.error('Alert WebSocket error:', e); };
+   
+       alertSocket.onmessage = function(e) {
+           const alertData = JSON.parse(e.data);
+           console.log("Received new alert:", alertData);
+   
+           // Optional: Update dashboard summary counts (more complex, maybe later)
+           // const totalAlertsElement = document.getElementById('totalAlerts24h');
+           // if (totalAlertsElement) { totalAlertsElement.textContent = parseInt(totalAlertsElement.textContent) + 1; }
+   
+           // --- Add row to Recent Activity/Anomalies Table ---
+           if (recentAlertsTableBody) {
+               const newRow = recentAlertsTableBody.insertRow(0); // Insert at top
+               newRow.classList.add('border-b', 'hover:bg-gray-50');
+   
+               let typeClass = '';
+               if (alertData.alert_type_code === 'SQLI') typeClass = 'text-red-600 font-semibold';
+               else if (alertData.alert_type_code === 'DDOS') typeClass = 'text-orange-600 font-semibold';
+   
+               // Match columns in the "Recent Activity" table
+               newRow.insertCell(0).textContent = alertData.timestamp || '';
+               newRow.insertCell(1).textContent = alertData.source_ip || '';
+               const typeCell = newRow.insertCell(2);
+               typeCell.textContent = alertData.alert_type_display || alertData.alert_type_code || '';
+               typeCell.className = typeClass; // Apply styling class
+               newRow.insertCell(3).textContent = alertData.details ? alertData.details.substring(0, 150) + (alertData.details.length > 150 ? '...' : '') : '';
+   
+               // Add styling to cells
+               for (let i=0; i<newRow.cells.length; i++){ newRow.cells[i].classList.add('px-4', 'py-2'); }
+   
+               // Optional: Limit rows shown in this dashboard snippet
+                const MAX_RECENT_ALERTS = 10;
+                while (recentAlertsTableBody.rows.length > MAX_RECENT_ALERTS) {
+                    recentAlertsTableBody.deleteRow(recentAlertsTableBody.rows.length - 1);
+                }
+           }
+       };
+
+</script>
+{% endblock %}

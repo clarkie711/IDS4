@@ -1,0 +1,34 @@
+{# detection/templates/detection/manage_rules.html #}
+{% extends "detection/base.html" %}
+
+{% block title %}Manage Detection Rules{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-semibold text-gray-800">Manage Detection Rules</h2>
+    <p class="text-sm text-gray-500">Select a rule type below to view, add, edit, or delete specific rules.</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+    {# SQLi Rules Card #}
+    <div class="bg-white p-6 rounded-2xl shadow hover:shadow-lg transition">
+        <h3 class="text-lg font-semibold text-indigo-600 mb-2">SQL Injection Patterns</h3>
+        <p class="text-sm text-gray-600 mb-4">Manage regular expression patterns used to detect SQLi attempts.</p>
+        <p class="text-sm text-gray-500 mb-4">Current Count: {{ sqli_rule_count }}</p>
+        <a href="{% url 'sqli_pattern_list' %}" class="inline-block px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700">Manage SQLi Rules</a>
+    </div>
+
+    {# DDoS Rules Card #}
+    <div class="bg-white p-6 rounded-2xl shadow hover:shadow-lg transition">
+        <h3 class="text-lg font-semibold text-indigo-600 mb-2">DDoS Rate Limiting</h3>
+        <p class="text-sm text-gray-600 mb-4">Configure default and port-specific request thresholds.</p>
+        <div class="space-y-2">
+            <a href="{% url 'ddos_config_update' %}" class="block w-full text-center px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-md hover:bg-blue-600">Manage Default Config</a>
+            <a href="{% url 'port_specific_ddos_list' %}" class="block w-full text-center px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-md hover:bg-blue-600">Manage Port Rules ({{ port_ddos_rule_count }})</a>
+        </div>
+    </div>
+
+
+</div>
+{% endblock %}

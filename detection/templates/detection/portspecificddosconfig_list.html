@@ -1,0 +1,79 @@
+{# detection/templates/detection/portspecificddosconfig_list.html #}
+{% extends "detection/base.html" %}
+
+{% block title %}Port-Specific DDoS Rules{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h2 class="text-2xl font-semibold text-gray-800">Manage Port-Specific DDoS Rules</h2>
+    <p class="text-sm text-gray-500">Define custom rate limits that override the default for specific network ports.</p>
+</div>
+
+<div class="bg-white p-4 rounded-2xl shadow mb-6">
+    <div class="flex justify-between items-center mb-3">
+        <h3 class="text-lg font-semibold text-indigo-600">Current Port Rules</h3>
+        {# Link to the CreateView using Django URL tag #}
+        <a href="{% url 'port_specific_ddos_create' %}" class="bg-indigo-600 text-white rounded px-4 py-2 hover:bg-indigo-700 text-sm">Add New Port Rule</a>
+    </div>
+    <div class="overflow-x-auto">
+        {% if port_rules %} {# Use context_object_name from ListView #}
+            <table class="min-w-full text-sm text-left text-gray-600">
+                <thead class="text-xs text-gray-500 uppercase bg-gray-100">
+                    <tr>
+                        <th class="px-4 py-2">Port</th>
+                        <th class="px-4 py-2">Description</th>
+                        <th class="px-4 py-2">Window (s)</th>
+                        <th class="px-4 py-2">Threshold (req)</th>
+                        <th class="px-4 py-2">Active</th>
+                        <th class="px-4 py-2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for rule in port_rules %}
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="px-4 py-2 font-semibold">{{ rule.port }}</td>
+                        <td class="px-4 py-2">{{ rule.description|default:"-" }}</td>
+                        <td class="px-4 py-2">{{ rule.time_window_seconds }}</td>
+                        <td class="px-4 py-2">{{ rule.request_threshold }}</td>
+                        <td class="px-4 py-2">
+                            {% if rule.is_active %}
+                                <span class="inline-block px-2 py-1 text-xs font-semibold text-green-700 bg-green-100 rounded-full">Yes</span>
+                            {% else %}
+                                <span class="inline-block px-2 py-1 text-xs font-semibold text-red-700 bg-red-100 rounded-full">No</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2 whitespace-nowrap"> {# Prevent wrapping for buttons #}
+                            <a href="{% url 'port_specific_ddos_update' rule.pk %}" class="text-blue-600 hover:underline mr-3">Edit</a>
+                            <form action="{% url 'port_specific_ddos_delete' rule.pk %}" method="post" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="text-red-600 hover:underline" onclick="return confirm('Are you sure you want to delete the rule for port {{ rule.port }}?')">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {# Add Pagination controls here if using paginate_by in ListView #}
+             {% if is_paginated %}
+                <div class="mt-4 flex justify-center">
+                    <span class="text-sm text-gray-700">
+                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}.
+                    </span>
+                    <div class="ml-4">
+                        {% if page_obj.has_previous %}
+                            <a href="?page=1" class="px-3 py-1 border rounded hover:bg-gray-100">« first</a>
+                            <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1 border rounded hover:bg-gray-100">previous</a>
+                        {% endif %}
+                        {% if page_obj.has_next %}
+                            <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1 border rounded hover:bg-gray-100">next</a>
+                            <a href="?page={{ page_obj.paginator.num_pages }}" class="px-3 py-1 border rounded hover:bg-gray-100">last »</a>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+        {% else %}
+             <p class="text-sm text-gray-500 py-4 text-center">No port-specific DDoS rules defined yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
